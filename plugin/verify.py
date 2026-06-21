@@ -117,8 +117,14 @@ def multi_angle_search(claim: str, max_per_angle: int = 3) -> list[dict]:
 def verify_single(claim: str, force_search: bool = True) -> dict:
     """Verify a single claim with optional web search.
 
+    Four status categories:
+      ✅ 基本正确 — ≥2 independent sources agree
+      ⚡ 有争议 — sources disagree or insufficient independent sources
+      ❓ 查不到 — searched but found no relevant sources
+      ❌ 错 — sources clearly contradict the claim
+
     Returns:
-        {"claim": str, "status": "✅"|"🔧"|"⚡"|"❌",
+        {"claim": str, "status": "✅"|"⚡"|"❓"|"❌"|"⚠️",
          "correct": str, "sources": [dict], "note": str}
     """
     needs_search = force_search or is_time_sensitive(claim)
@@ -129,7 +135,7 @@ def verify_single(claim: str, force_search: bool = True) -> dict:
             "status": "⚠️",
             "correct": "",
             "sources": [],
-            "note": "Not time-sensitive. Verify with verify_claims tool if needed.",
+            "note": "Not searched — LLM internal knowledge only. Use verify tool if certainty needed.",
         }
 
     sources = multi_angle_search(claim)
@@ -137,10 +143,10 @@ def verify_single(claim: str, force_search: bool = True) -> dict:
     if not sources:
         return {
             "claim": claim,
-            "status": "❌",
+            "status": "❓",
             "correct": "",
             "sources": [],
-            "note": "No web search results. Cannot verify.",
+            "note": "查不到 — no web results found",
         }
 
     # Count independent sources by domain
@@ -157,15 +163,18 @@ def verify_single(claim: str, force_search: bool = True) -> dict:
     num_domains = len(domains)
     num_results = len(sources)
 
-    if num_domains >= 2:
+    if num_domains >= 2 and num_results >= 2:
         status = "✅"
-        note = f"Confirmed by {num_domains} independent sources ({num_results} results)"
+        note = f"基本正确 — {num_domains} independent sources, {num_results} results"
     elif num_domains == 1 and num_results >= 2:
         status = "⚡"
-        note = f"Multiple results from same source ({num_results} results, {num_domains} domain). Needs second independent source."
+        note = f"有争议 — {num_results} results but all from same domain ({num_domains})"
+    elif num_domains >= 2:
+        status = "⚡"
+        note = f"有争议 — {num_domains} domains but only {num_results} result(s), low confidence"
     else:
         status = "⚡"
-        note = f"Only {num_results} result(s) from {num_domains} domain(s). Low confidence."
+        note = f"有争议 — only {num_results} result(s) from {num_domains} domain(s)"
 
     return {
         "claim": claim,
@@ -239,18 +248,21 @@ def format_verification_context(results: list[dict]) -> str:
         note = r.get("note", "")
 
         if tag == "✅":
-            lines.append(f"✅ {claim} (confirmed: {note})")
-        elif tag == "🔧":
-            lines.append(f"🔧 {claim} → {correct}")
+            lines.append(f"✅ {claim} — 基本正确: {note}")
         elif tag == "⚡":
-            lines.append(f"⚡ {claim} — {note}")
+            lines.append(f"⚡ {claim} — 有争议: {note}")
+        elif tag == "❓":
+            lines.append(f"❓ {claim} — 查不到: {note}")
         elif tag == "❌":
-            lines.append(f"❌ {claim} — {note}")
+            lines.append(f"❌ {claim} — 错: {correct or note}")
+        elif tag == "⚠️":
+            lines.append(f"⚠️ {claim} — 未外验: {note}")
 
     lines.append(
         "\nUse the above verified information. "
         "For ⚡ items, acknowledge uncertainty. "
-        "For 🔧 items, use the corrected value."
+        "For ❌ items, do NOT repeat the claim. "
+        "For ❓ items, say 'could not find reliable info'."
     )
     return "\n".join(lines)
 
@@ -294,7 +306,7 @@ def format_truth_sandwich(errors: list[dict]) -> str:
 
 def format_verify_tool_output(results: list[dict]) -> str:
     """Format verification results for the verify_claims tool output."""
-    summary = {"✅": 0, "🔧": 0, "⚡": 0, "❌": 0, "⚠️": 0}
+    summary = {"✅": 0, "⚡": 0, "❓": 0, "❌": 0, "⚠️": 0}
     for r in results:
         s = r.get("status", "⚠️")
         summary[s] = summary.get(s, 0) + 1
@@ -302,7 +314,7 @@ def format_verify_tool_output(results: list[dict]) -> str:
     lines = [
         "═══════════════════════════════════════",
         "  Fact-Check Verification Results",
-        f"  ✅ {summary.get('✅',0)} confirmed  🔧 {summary.get('🔧',0)} corrected  ⚡ {summary.get('⚡',0)} disputed  ❌ {summary.get('❌',0)} unverifiable",
+        f"  ✅ {summary.get('✅',0)}基本正确  ⚡ {summary.get('⚡',0)}有争议  ❓ {summary.get('❓',0)}查不到  ❌ {summary.get('❌',0)}错",
         "═══════════════════════════════════════\n",
     ]
 
@@ -313,7 +325,15 @@ def format_verify_tool_output(results: list[dict]) -> str:
         note = r.get("note", "")
         sources = r.get("sources", [])
 
-        lines.append(f"{tag} **{claim}**")
+        tag_label = {
+            "✅": "✅ 基本正确",
+            "⚡": "⚡ 有争议",
+            "❓": "❓ 查不到",
+            "❌": "❌ 错",
+            "⚠️": "⚠️ 未验证",
+        }.get(tag, tag)
+
+        lines.append(f"{tag_label}: **{claim}**")
         if correct:
             lines.append(f"   → Correct: {correct}")
         if note:
@@ -339,10 +359,11 @@ def create_diagnostic_report(
         "claims_count": len(claims),
         "duration_ms": duration_ms,
         "summary": {
-            "confirmed": sum(1 for r in results if r.get("status") == "✅"),
-            "corrected": sum(1 for r in results if r.get("status") == "🔧"),
+            "basic_correct": sum(1 for r in results if r.get("status") == "✅"),
             "disputed": sum(1 for r in results if r.get("status") == "⚡"),
-            "unverifiable": sum(1 for r in results if r.get("status") == "❌"),
+            "not_found": sum(1 for r in results if r.get("status") == "❓"),
+            "wrong": sum(1 for r in results if r.get("status") == "❌"),
+            "unchecked": sum(1 for r in results if r.get("status") == "⚠️"),
         },
         "results": results,
     }
