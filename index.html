@@ -301,8 +301,8 @@
     <li><a href="#examples">Examples</a></li>
     <li><a href="#tradeoffs">Trade-offs</a></li>
     <li><a href="#pitfalls">Pitfalls</a></li>
+    <li><a href="#logic">Logic</a></li>
     <li><a href="#nova">NOVA</a></li>
-    <li><a href="logic-theory-check.html">Logic</a></li>
   </ul>
   <div class="hamburger" onclick="document.getElementById('navLinks').classList.toggle('open')">
     <span></span><span></span><span></span>
@@ -694,6 +694,88 @@
 </section>
 
 <div class="divider"></div>
+
+<div class="divider"></div>
+
+<!-- LOGIC & THEORY CHECK -->
+<section id="logic">
+  <div class="reveal">
+    <div class="section-tag">Logic & Theory Verification</div>
+    <h2>Facts Are True. But Is The Argument Valid?</h2>
+    <p class="section-sub">Facts may be correct but the reasoning connecting them can still be fallacious. Logic-checking catches what fact-checking misses: invalid causal inferences, circular arguments, false dichotomies, and statistical fallacies.</p>
+  </div>
+
+  <div class="reveal" style="margin-bottom:24px;">
+    <div class="example-box" style="border-color:var(--accent);">
+      <h4 style="color:var(--accent);">🧬 Example: When Facts Are True But Logic Is Flawed</h4>
+      <div class="example-line">Fact: "CO₂ is a greenhouse gas" → <span class="badge" style="background:#00b89433;color:#00b894;padding:2px 6px;border-radius:4px;">✅ True</span></div>
+      <div class="example-line">Fact: "Global temperatures increased 1.1°C" → <span class="badge" style="background:#00b89433;color:#00b894;padding:2px 6px;border-radius:4px;">✅ True</span></div>
+      <div class="example-line">Claim: "Therefore CO₂ increase after temperature means CO₂ doesn't cause warming" → <span class="badge" style="background:#e1705533;color:#e17055;padding:2px 6px;border-radius:4px;">❌ Post hoc ergo propter hoc</span></div>
+      <div class="example-line" style="font-size:0.8rem;color:var(--text-dim);">Fact-check confirms both facts. Logic-check catches the invalid causal inference.</div>
+    </div>
+  </div>
+
+  <div class="reveal" style="overflow-x:auto;">
+    <table class="framework-table">
+      <thead><tr><th>Framework</th><th>Core Mechanism</th><th>Key Data</th><th>Source</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>FLICC</strong></td>
+          <td>Fake experts, Logical fallacies, Impossible expectations, Cherry picking, Conspiracy</td>
+          <td>NLP detection F1 2.5-3.5× better</td>
+          <td><span class="src-academic">Nature Sci Rep 2024</span></td>
+        </tr>
+        <tr>
+          <td><strong>Toulmin Model</strong></td>
+          <td>Claim → Data → Warrant → Qualifier → Rebuttal → Backing</td>
+          <td>Foundation of argumentation theory</td>
+          <td><span class="src-academic">Toulmin 1958</span></td>
+        </tr>
+        <tr>
+          <td><strong>Jeong Prompt Ranking</strong></td>
+          <td>3 contexts (Counterargument/Explanation/Goal) → rank → classify</td>
+          <td>Zero-shot F1 +0.60, 29 fallacy types</td>
+          <td><span class="src-academic">NAACL 2025</span></td>
+        </tr>
+        <tr>
+          <td><strong>FoVer</strong></td>
+          <td>NL → First-order logic → Automated verification</td>
+          <td>Formal logic verification of reasoning</td>
+          <td><span class="src-academic">TACL (MIT) 2025</span></td>
+        </tr>
+        <tr>
+          <td><strong>CLOVER</strong></td>
+          <td>Compositional FOL translation + verification</td>
+          <td>Neuro-symbolic complex reasoning</td>
+          <td><span class="src-academic">arXiv 2024</span></td>
+        </tr>
+        <tr>
+          <td><strong>Hamborg Media Bias</strong></td>
+          <td>Word choice, labeling, framing taxonomy</td>
+          <td>Cross-disciplinary NLP usable</td>
+          <td><span class="src-academic">Springer 2023</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="reveal" style="margin-top:24px;">
+    <div class="card-grid">
+      <div class="card" style="border-color:var(--green);">
+        <h3 style="color:var(--green);">✅ Strong</h3>
+        <p>Circular reasoning, appeal to popularity, slogans, thought-terminating clichés</p>
+      </div>
+      <div class="card" style="border-color:var(--yellow);">
+        <h3 style="color:var(--yellow);">🟡 Medium</h3>
+        <p>Straw man, false dichotomy, slippery slope, appeal to emotion, red herring</p>
+      </div>
+      <div class="card" style="border-color:var(--red);">
+        <h3 style="color:var(--red);">❌ Weak</h3>
+        <p>False analogy, statistical fallacies, Simpson's paradox — needs multi-step reasoning</p>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- NOVA -->
 <section id="nova" style="text-align:center;">
