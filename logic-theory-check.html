@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Logic & Theory Check — AI Argument Verification</title>
+<meta name="description" content="A logic and theory verification framework that complements fact-checking by analyzing argument structure, causal reasoning, fallacy detection, and theoretical consistency.">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --card: #1a1a28;
+    --card-hover: #22223a;
+    --border: #2a2a3e;
+    --accent: #a855f7;
+    --accent-glow: #a855f733;
+    --green: #34d399;
+    --yellow: #facc15;
+    --red: #fb7185;
+    --blue: #60a5fa;
+    --text: #e8e8f0;
+    --text-dim: #8888a0;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(10,10,15,0.8); backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px; height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-brand { font-weight: 700; font-size: 1rem; color: var(--accent); letter-spacing: -0.5px; }
+  .nav-links { display: flex; gap: 24px; list-style: none; }
+  .nav-links a { color: var(--text-dim); text-decoration: none; font-size: 0.85rem; transition: color 0.2s; }
+  .nav-links a:hover { color: var(--text); }
+  section { padding: 100px 24px; max-width: 960px; margin: 0 auto; }
+  @media (max-width: 768px) { section { padding: 64px 20px; } }
+  .hero {
+    min-height: 80vh;
+    display: flex; flex-direction: column; justify-content: center;
+    padding-top: 80px;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent-glow); color: var(--accent);
+    padding: 4px 12px; border-radius: 20px;
+    font-size: 0.75rem; font-weight: 600; letter-spacing: 0.5px;
+    margin-bottom: 12px; width: fit-content;
+    border: 1px solid var(--accent);
+  }
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 800; line-height: 1.1; letter-spacing: -2px;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, var(--accent), var(--blue));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero p { font-size: 1.15rem; color: var(--text-dim); max-width: 640px; margin-bottom: 32px; }
+  .hero-stats { display: flex; gap: 40px; flex-wrap: wrap; }
+  .hero-stat { text-align: center; }
+  .hero-stat-num {
+    font-size: 2rem; font-weight: 800;
+    background: linear-gradient(135deg, var(--green), var(--blue));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-stat-label { font-size: 0.8rem; color: var(--text-dim); margin-top: 2px; }
+  .btn-group { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 40px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 24px; border-radius: var(--radius-sm);
+    font-size: 0.9rem; font-weight: 600; text-decoration: none;
+    transition: all 0.2s; cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: white; border: 1px solid var(--accent); }
+  .btn-primary:hover { background: #b76aff; transform: translateY(-1px); box-shadow: 0 4px 20px var(--accent-glow); }
+  .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-outline:hover { border-color: var(--text-dim); background: var(--card); }
+  .reveal { opacity: 0; transform: translateY(30px); transition: all 0.7s cubic-bezier(0.22, 1, 0.36, 1); }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  .section-tag {
+    font-size: 0.75rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 8px;
+  }
+  h2 { font-size: 2rem; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.5px; }
+  .section-sub { color: var(--text-dim); font-size: 1rem; margin-bottom: 40px; max-width: 600px; }
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; transition: all 0.3s; }
+  .card:hover { border-color: var(--accent-glow); background: var(--card-hover); transform: translateY(-2px); }
+  .card-icon { font-size: 2rem; margin-bottom: 12px; }
+  .card h3 { font-size: 1rem; margin-bottom: 8px; }
+  .card p { font-size: 0.85rem; color: var(--text-dim); line-height: 1.6; }
+  .framework-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 24px 0; }
+  .framework-table th { background: var(--surface); padding: 12px 16px; text-align: left; font-weight: 700; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); border-bottom: 1px solid var(--border); }
+  .framework-table td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .framework-table tr:hover td { background: var(--card-hover); }
+  .badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .divider { height: 1px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: 40px 0; }
+  .footer { text-align: center; padding: 40px 24px; color: var(--text-dim); font-size: 0.8rem; border-top: 1px solid var(--border); }
+  .footer a { color: var(--accent); text-decoration: none; }
+  .footer a:hover { text-decoration: underline; }
+  .example-box { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin: 16px 0; }
+  .example-box h4 { font-size: 0.9rem; margin-bottom: 8px; }
+  .example-line { padding: 6px 0; font-size: 0.85rem; display: flex; align-items: center; gap: 8px; }
+  .src-academic { background: #34d39922; color: #34d399; display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+  .hamburger { display: none; flex-direction: column; gap: 4px; cursor: pointer; padding: 4px; }
+  .hamburger span { width: 20px; height: 2px; background: var(--text); border-radius: 2px; transition: 0.3s; }
+  @media (max-width: 640px) {
+    .nav-links { display: none; }
+    .hamburger { display: flex; }
+    .nav-links.open { display: flex; flex-direction: column; position: absolute; top: 56px; left: 0; right: 0; background: rgba(10,10,15,0.95); backdrop-filter: blur(20px); padding: 16px 24px; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-brand">Logic & Theory Check</span>
+  <ul class="nav-links" id="navLinks">
+    <li><a href="#frameworks">Frameworks</a></li>
+    <li><a href="#datasets">Datasets</a></li>
+    <li><a href="#methodology">Methodology</a></li>
+    <li><a href="index.html">← Fact-Check</a></li>
+  </ul>
+  <div class="hamburger" onclick="document.getElementById('navLinks').classList.toggle('open')">
+    <span></span><span></span><span></span>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="top">
+  <div class="reveal">
+    <div class="hero-badge">v1.1.0 · Argument Analysis</div>
+    <h1>Logic & Theory Check</h1>
+    <p>Verifies logical structure, causal reasoning, and theoretical consistency of claims. Complements fact-checking — facts can be true but the argument connecting them can be invalid.</p>
+    <div class="badge-row">
+      <img src="https://img.shields.io/badge/academic_papers-12-34d399?style=flat-square" alt="12 papers">
+      <img src="https://img.shields.io/badge/fallacy_types-29-a855f7?style=flat-square" alt="29 fallacy types">
+      <img src="https://img.shields.io/badge/datasets-5-60a5fa?style=flat-square" alt="5 datasets">
+    </div>
+    <div class="btn-group">
+      <a class="btn btn-primary" href="https://github.com/onezion12344/fact-check-agent">GitHub Repo →</a>
+      <a class="btn btn-outline" href="#frameworks">Explore Frameworks</a>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="hero-stat-num">12</div><div class="hero-stat-label">Academic Papers</div></div>
+      <div class="hero-stat"><div class="hero-stat-num">29</div><div class="hero-stat-label">Fallacy Types</div></div>
+      <div class="hero-stat"><div class="hero-stat-num">5</div><div class="hero-stat-label">Benchmark Datasets</div></div>
+      <div class="hero-stat"><div class="hero-stat-num">2</div><div class="hero-stat-label">Verification Methods</div></div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- FRAMEWORKS -->
+<section id="frameworks">
+  <div class="reveal">
+    <div class="section-tag">Academic Frameworks</div>
+    <h2>6 Core Frameworks</h2>
+    <p class="section-sub">Each addresses a different layer of logical analysis — from simple fallacy detection to formal logic verification.</p>
+  </div>
+
+  <div class="reveal" style="overflow-x:auto;">
+    <table class="framework-table">
+      <thead><tr><th>Framework</th><th>Core Mechanism</th><th>Key Data</th><th>Source</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>FLICC</strong></td>
+          <td>Fake experts, Logical fallacies, Impossible expectations, Cherry picking, Conspiracy</td>
+          <td>NLP automated detection: F1 2.5-3.5× better than prior work</td>
+          <td><span class="src-academic">Nature Sci Rep 2024</span></td>
+        </tr>
+        <tr>
+          <td><strong>Toulmin Model</strong></td>
+          <td>Claim → Data → Warrant → Qualifier → Rebuttal → Backing</td>
+          <td>Foundation of modern argumentation theory</td>
+          <td><span class="src-academic">Toulmin, 1958</span></td>
+        </tr>
+        <tr>
+          <td><strong>Jeong Prompt Ranking</strong></td>
+          <td>3 contexts (Counterargument/Explanation/Goal) → rank → classify</td>
+          <td>Zero-shot F1 +0.60, fine-tune +0.45 on 5 datasets, 29 fallacy types</td>
+          <td><span class="src-academic">NAACL Findings 2025</span></td>
+        </tr>
+        <tr>
+          <td><strong>FoVer</strong></td>
+          <td>Natural language → First-order logic → Automated verification</td>
+          <td>Formal logic verification of NL reasoning</td>
+          <td><span class="src-academic">TACL (MIT Press) 2025</span></td>
+        </tr>
+        <tr>
+          <td><strong>CLOVER</strong></td>
+          <td>Compositional FOL translation + verification (FoVer successor)</td>
+          <td>Neuro-symbolic approach to complex reasoning</td>
+          <td><span class="src-academic">arXiv 2024</span></td>
+        </tr>
+        <tr>
+          <td><strong>Hamborg Media Bias</strong></td>
+          <td>Word choice, labeling, framing taxonomy</td>
+          <td>Cross-disciplinary framework, NLP usable</td>
+          <td><span class="src-academic">Springer 2023</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- LLM PERFORMANCE -->
+<section id="performance">
+  <div class="reveal">
+    <div class="section-tag">Empirical Performance</div>
+    <h2>LLM Fallacy Detection by Type</h2>
+    <p class="section-sub">LLMs show strong variance across fallacy categories (from Jeong et al. 2025, NAACL).</p>
+  </div>
+
+  <div class="reveal card-grid">
+    <div class="card" style="border-color:var(--green);">
+      <h3 style="color:var(--green);">✅ Strong</h3>
+      <p>Circular reasoning, appeal to popularity, slogans, thought-terminating clichés</p>
+      <p style="font-size:0.75rem;color:var(--text-dim);margin-top:4px;">Simple structure, fixed patterns</p>
+    </div>
+    <div class="card" style="border-color:var(--yellow);">
+      <h3 style="color:var(--yellow);">🟡 Medium</h3>
+      <p>Straw man, false dichotomy, slippery slope, appeal to emotion, red herring</p>
+      <p style="font-size:0.75rem;color:var(--text-dim);margin-top:4px;">Requires reasoning decoding, confidence fluctuates</p>
+    </div>
+    <div class="card" style="border-color:var(--red);">
+      <h3 style="color:var(--red);">❌ Weak</h3>
+      <p>False analogy, burden of proof evasion, statistical fallacies, Simpson's paradox</p>
+      <p style="font-size:0.75rem;color:var(--text-dim);margin-top:4px;">Needs background knowledge + multi-step reasoning</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- DATASETS -->
+<section id="datasets">
+  <div class="reveal">
+    <div class="section-tag">Benchmarks</div>
+    <h2>5 Public Datasets</h2>
+    <p class="section-sub">Covering news, education, social media, and climate discourse.</p>
+  </div>
+
+  <div class="reveal" style="overflow-x:auto;">
+    <table class="framework-table">
+      <thead><tr><th>Dataset</th><th>Size</th><th>Domain</th><th>Fallacy Types</th><th>Availability</th></tr></thead>
+      <tbody>
+        <tr><td><strong>PROPAGANDA</strong></td><td>12,267</td><td>News/Politics</td><td>18</td><td>Public</td></tr>
+        <tr><td><strong>LOGIC</strong></td><td>2,449</td><td>Educational dialogue</td><td>13</td><td>Public</td></tr>
+        <tr><td><strong>ARGOTARIO</strong></td><td>1,338</td><td>Dialogue/General</td><td>6</td><td>Public</td></tr>
+        <tr><td><strong>CLIMATE</strong></td><td>685</td><td>News/Climate</td><td>11</td><td>Public</td></tr>
+        <tr><td><strong>COVID-19</strong></td><td>154</td><td>Social media</td><td>11</td><td>Public</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- COMPLEMENT -->
+<section id="complement">
+  <div class="reveal">
+    <div class="section-tag">Complement to Fact-Check</div>
+    <h2>Facts vs Logic</h2>
+    <p class="section-sub">Fact-checking verifies individual claims. Logic-checking verifies how those claims are connected. Both are needed.</p>
+  </div>
+
+  <div class="reveal" style="overflow-x:auto;">
+    <table class="framework-table">
+      <thead><tr><th>Dimension</th><th>Fact-Check Agent</th><th>Logic & Theory Check</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Target</strong></td><td>Individual factual claims</td><td>Argument structure + reasoning</td></tr>
+        <tr><td><strong>Method</strong></td><td>SIFT → CoVe+FIRE → FABLE → Truth Sandwich</td><td>Toulmin → FLICC → Prompt Ranking → FoVer</td></tr>
+        <tr><td><strong>Search</strong></td><td>External web search (≥2 sources)</td><td>Internal logic analysis + benchmark comparison</td></tr>
+        <tr><td><strong>Output</strong></td><td>✅ Correct / ⚡ Disputed / ❓ Not found / ❌ Wrong</td><td>✅ Valid / ⚡ Questionable structure / ❌ Fallacious</td></tr>
+        <tr><td><strong>When used</strong></td><td>Price/time/address/stat checks</td><td>Political/scientific/ethical arguments</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="reveal" style="margin-top:24px;">
+    <div class="example-box" style="border-color:var(--accent);">
+      <h4 style="color:var(--accent);">🧬 Example: When Facts Are True But Logic Is Flawed</h4>
+      <div class="example-line">Fact: "CO₂ is a greenhouse gas" → ✅ True</div>
+      <div class="example-line">Fact: "Global temperatures increased 1.1°C" → ✅ True</div>
+      <div class="example-line">Claim: "Therefore CO₂ increase after temperature rise means CO₂ doesn't cause warming" → ❌ Flawed causal reasoning (post hoc ergo propter hoc)</div>
+      <div class="example-line" style="font-size:0.8rem;color:var(--text-dim);margin-top:8px;">Fact-check would confirm both facts. Logic-check catches the invalid causal inference.</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section style="text-align:center;padding:60px 24px;">
+  <div class="reveal">
+    <h2>Built Together</h2>
+    <p style="color:var(--text-dim);margin-bottom:24px;font-size:0.95rem;">
+      Part of the Fact-Check Agent ecosystem. Loaded as companion skill in Hermes Agent.<br>
+      12 papers + 5 public datasets + 29 fallacy types = comprehensive logical verification.
+    </p>
+    <div class="btn-group" style="justify-content:center;">
+      <a class="btn btn-primary" href="https://github.com/onezion12344/fact-check-agent">GitHub Repo →</a>
+      <a class="btn btn-outline" href="index.html">Fact-Check Agent</a>
+    </div>
+  </div>
+</section>
+
+<div class="footer">
+  <p>Logic & Theory Check v1.1.0 · Part of <a href="https://onezion12344.github.io/fact-check-agent/">Fact-Check Agent</a> ecosystem<br>
+  Frameworks: FLICC · Toulmin · Jeong Prompt Ranking · FoVer · CLOVER · Hamborg</p>
+</div>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) entry.target.classList.add('visible');
+  });
+}, { threshold: 0.15, rootMargin: '0px 0px -50px 0px' });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+document.addEventListener('scroll', () => {
+  const nav = document.querySelector('.nav');
+  nav.style.background = window.scrollY > 50 ? 'rgba(10,10,15,0.95)' : 'rgba(10,10,15,0.8)';
+});
+</script>
+</body>
+</html>

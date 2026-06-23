@@ -301,6 +301,8 @@
     <li><a href="#examples">Examples</a></li>
     <li><a href="#tradeoffs">Trade-offs</a></li>
     <li><a href="#pitfalls">Pitfalls</a></li>
+    <li><a href="#nova">NOVA</a></li>
+    <li><a href="logic-theory-check.html">Logic</a></li>
   </ul>
   <div class="hamburger" onclick="document.getElementById('navLinks').classList.toggle('open')">
     <span></span><span></span><span></span>
@@ -311,6 +313,7 @@
 <section class="hero" id="top">
   <div class="reveal">
     <div class="hero-badge">v1.1.0 · Hybrid Framework</div>
+    <div class="hero-badge" style="border-color:#00b894;background:rgba(0,184,148,0.15);color:#00b894;margin-top:4px;">NOVA 2026 · Social Impact Track</div>
     <h1>Fact-Check Agent</h1>
     <p>An AI-powered fact-checking framework that combines journalism standards with LLM academic research. Pre-answer verification plus post-answer deep audit for AI agents.</p>
     <div class="badge-row">
@@ -687,6 +690,38 @@
         Time-sensitive items (hours, prices, schedules) always need current verification. Even a source published 24 hours ago can be outdated.
       </li>
     </ul>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- NOVA -->
+<section id="nova" style="text-align:center;">
+  <div class="reveal">
+    <div class="section-tag" style="text-align:center;">NOVA National AI Creativity Competition</div>
+    <h2>HKUST × Tencent Research Institute</h2>
+    <p class="section-sub" style="margin:0 auto 20px;">
+      Social Impact track — Fighting misinformation in the AI era with a hybrid journalism+LLM verification framework.
+      Tested in production: A/B test shows <strong style="color:var(--green);">0% → 100%</strong> error catch rate improvement.
+    </p>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-bottom:20px;">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 24px;text-align:center;">
+        <div style="font-size:2rem;font-weight:700;color:var(--accent);">0%</div>
+        <div style="font-size:0.8rem;color:var(--text-dim);">Auto-Verify Only</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 24px;text-align:center;">
+        <div style="font-size:2rem;font-weight:700;color:var(--green);">100%</div>
+        <div style="font-size:0.8rem;color:var(--text-dim);">Full Pipeline</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 24px;text-align:center;">
+        <div style="font-size:2rem;font-weight:700;color:var(--yellow);">2×</div>
+        <div style="font-size:0.8rem;color:var(--text-dim);">Real Case Studies</div>
+      </div>
+    </div>
+    <div class="btn-group" style="justify-content:center;">
+      <a class="btn btn-primary" href="https://github.com/onezion12344/nova-competition">NOVA Repo →</a>
+      <a class="btn btn-outline" href="https://github.com/onezion12344/fact-check-agent">GitHub</a>
+    </div>
   </div>
 </section>
 
