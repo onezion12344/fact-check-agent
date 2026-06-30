@@ -1,6 +1,6 @@
 # Double-Check — AI Fact Verification Pipeline
 
-[![Version](https://img.shields.io/badge/version-2.0.0-6c5ce7)]()
+[![Version](https://img.shields.io/badge/version-2.1.0-6c5ce7)]()
 [![Frameworks](https://img.shields.io/badge/frameworks-31-00c853)]()
 [![Catch Rate](https://img.shields.io/badge/catch_rate-100%25-448aff)]()
 [![MIT](https://img.shields.io/badge/license-MIT-86868b)]()
@@ -87,7 +87,65 @@ Key design rules:
 
 ---
 
-## Cases Studies
+## Architecture
+
+The Double-Check system has **two layers** — portable methodology + Hermes-native enforcement.
+
+### Layer 1: SKILL.md (Portable)
+
+The methodology document at `skill/SKILL.md` is pure prompt. Works as system context on any LLM-based agent:
+
+| Platform | How to load |
+|:---------|:------------|
+| **Claude Code** | Add to project, reference in `CLAUDE.md` |
+| **OpenClaw / Cursor** | Import as custom skill or system prompt |
+| **ChatGPT / Claude.ai** | Paste Phase 0.5 steps as custom instructions |
+| **Any API** | Prepend to system message |
+
+The pipeline (SIFT → CoVe+FIRE → FABLE → Truth Sandwich) is framework-agnostic — no code changes needed to use it as guidance.
+
+### Layer 2: Hermes Plugin (Automatic)
+
+The Python plugin at `plugin/` uses Hermes-specific lifecycle hooks:
+
+| Hook | What it does | API |
+|:-----|:-------------|:----|
+| `pre_llm_call` | Detect factual questions → inject context | Hermes lifecycle hook |
+| `transform_llm_output` | Check dense responses for factual claims | Hermes output hook |
+| `ctx.llm.complete()` | Classify question type (fact/theory/tool-use) | Hermes context API |
+| `delegate_task` | Spawn sub-agents for deep verification | Hermes sub-agent system |
+
+**Key design: Plugin is orchestrator, not worker.** It only detects and delegates — the actual verification runs in a sub-agent. This keeps the plugin at ~100 lines and lets the sub-agent use all available tools (search, browser, terminal).
+
+### Running on Other Agents
+
+To get automatic verification on a non-Hermes agent:
+
+| Effort | Method | Result |
+|:-------|:-------|:-------|
+| **Low** | Load SKILL.md as system prompt prefix | Manual pre-check, no code |
+| **Medium** | Wrap agent calls in a Python script | Auto pre-answer + post-answer |
+| **High** | Implement lifecycle hooks on your platform | Full auto enforcement |
+
+Minimal Python wrapper example:
+
+```python
+import openai
+
+def safe_answer(user_query):
+    with open("skill/SKILL.md") as f:
+        skill = f.read()
+    system = skill + "\n\nFollow Phase 0.5 before answering."
+    return openai.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "system", "content": system},
+                  {"role": "user", "content": user_query}]
+    )
+```
+
+---
+
+## Case Studies
 
 ### Camino de Santiago Planning
 - Round 1: 23 ⚠️ (guessed addresses/prices), 55 ✅ (source confirmed)
