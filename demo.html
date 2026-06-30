@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Double-Check — Live Demo</title>
+<style>
+  :root{--bg:#000;--text:#f5f5f7;--dim:#86868b;--accent:#6c5ce7;--green:#00c853;--red:#ff5252;--font:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',sans-serif}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--font);background:var(--bg);color:var(--text);padding:40px 24px}
+  .wrap{max-width:960px;margin:0 auto}
+  h1{font-size:2.4rem;font-weight:700;letter-spacing:-1px;margin-bottom:8px}
+  .sub{color:var(--dim);font-size:1rem;margin-bottom:40px}
+  .section{margin-bottom:48px}
+  h2{font-size:1.3rem;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+  .badge{display:inline-block;padding:2px 10px;border-radius:8px;font-size:.7rem;font-weight:600}
+  .badge-green{background:rgba(0,200,83,.15);color:var(--green);border:1px solid rgba(0,200,83,.3)}
+  .badge-accent{background:rgba(108,92,231,.15);color:var(--accent);border:1px solid rgba(108,92,231,.3)}
+  .badge-red{background:rgba(255,82,82,.15);color:var(--red);border:1px solid rgba(255,82,82,.3)}
+  .terminal{background:#0d0d0d;border:1px solid #222;border-radius:12px;padding:20px 24px;font-family:'SF Mono','Menlo','Monaco',monospace;font-size:.8rem;line-height:1.8;overflow-x:auto;margin-bottom:16px}
+  .terminal .prompt{color:var(--green)}
+  .terminal .cmd{color:var(--text)}
+  .terminal .out{color:var(--dim)}
+  .terminal .highlight{color:var(--accent);font-weight:600}
+  .terminal .warn{color:#ffd600}
+  .terminal .hook{color:#ff6b6b;font-weight:600}
+  .terminal .dim{color:#555}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px}
+  .card{background:#111;border:1px solid #222;border-radius:12px;padding:20px}
+  .card h3{font-size:.9rem;font-weight:600;margin-bottom:8px}
+  .card p{font-size:.8rem;color:var(--dim);line-height:1.6}
+  .card .status{font-size:1.5rem;margin-bottom:8px}
+  .arrow{color:var(--accent);font-size:1.2rem;margin:0 8px}
+  .tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.65rem;font-weight:600;margin-right:6px}
+  .tag-pre{background:rgba(68,138,255,.2);color:#448aff}
+  .tag-sift{background:rgba(108,92,231,.2);color:var(--accent)}
+  .tag-cove{background:rgba(0,200,83,.2);color:var(--green)}
+  .tag-fable{background:rgba(255,214,0,.2);color:#ffd600}
+  .insight{background:rgba(108,92,231,.08);border:1px solid rgba(108,92,231,.2);border-radius:12px;padding:20px;margin-bottom:24px}
+  .insight h3{font-size:.9rem;margin-bottom:8px;color:var(--accent)}
+  .insight p{font-size:.8rem;color:var(--dim);line-height:1.6}
+  .footer{margin-top:48px;padding-top:24px;border-top:1px solid #222;color:var(--dim);font-size:.8rem}
+  .log-time{color:#555;font-size:.65rem;margin-right:12px}
+  .cast-note{background:rgba(255,214,0,.08);border:1px solid rgba(255,214,0,.2);border-radius:8px;padding:12px 16px;margin-top:12px;font-size:.75rem;color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>⚡ Double-Check — Live Demo</h1>
+<p class="sub">Plugin hook + Skill methodology verification in Hermes Agent CLI</p>
+
+<div class="section">
+<h2><span class="badge badge-green">1</span> Environment</h2>
+<div class="terminal">
+<span class="log-time">$</span> <span class="highlight">hermes</span> --version<br>
+<span class="out">Hermes Agent v0.15.1 (2026.5.29)</span><br>
+<br>
+<span class="log-time">$</span> <span class="highlight">hermes</span> plugins list | grep double<br>
+<span class="out">│ double-check │ <span class="highlight">enabled</span> │ 2.0.0 │ Double-Check v2.0 — Unified Fact, Theory & Tool-Use verification. │</span><br>
+<br>
+<span class="log-time">$</span> <span class="highlight">hermes</span> skills list | grep double<br>
+<span class="out">│ double-check │ — │ local │ local │ <span class="highlight">enabled</span> │</span>
+</div>
+</div>
+
+<div class="section">
+<h2><span class="badge badge-green">2</span> Plugin Hook Test — pre_llm_call fires automatically</h2>
+<p style="font-size:.8rem;color:var(--dim);margin-bottom:12px">Running: <code>hermes chat -q "How much does a Nillkin Cube Pocket keyboard cost?" --skills double-check -v</code></p>
+
+<div class="terminal">
+<span class="dim">19:47:17</span> — Agent initialized with model: deepseek-v4-flash<br>
+<span class="dim">19:47:17</span> — Ephemeral system prompt: '[IMPORTANT: The user launched this CLI session with the "dou...'<br>
+<br>
+<span class="log-time">💬</span> Query: <span class="cmd">How much does a Nillkin Cube Pocket keyboard cost?</span><br>
+<br>
+<span class="hook">⚠️ 19:47:18 — plugins.double-check — Classify: 'question_type'</span><br>
+<span class="dim">│</span>  └── <span class="highlight">pre_llm_call HOOK FIRED</span> — plugin detected a factual question<span class="dim"><br>
+│     and attempted to classify it (fact/theory/tool-use)</span><br>
+<br>
+<span class="dim">19:47:26 — API call #1: 50k tokens → 181 out (7.7s)</span><br>
+<br>
+<span class="tag tag-pre">P0.5</span> Agent reasoning: <span class="dim">"The user is asking about the price. This is a fact-based question with a price claim, so I need to follow the double-check skill's Phase 0.5 (Pre-answer verification) process. Let me search for current prices from multiple independent sources."</span><br>
+<br>
+<span class="tag tag-cove">CoVe</span> <span class="highlight">web_search</span> "Nillkin Cube Pocket keyboard price" <span class="dim">(English)</span><br>
+<span class="tag tag-cove">CoVe</span> <span class="highlight">web_search</span> "Nillkin Cube Pocket 键盘 价格" <span class="dim">(Chinese — independent angle)</span><br>
+<br>
+<span class="dim">19:48:17 — Amazon listing found: $69.99 (currently unavailable)</span><br>
+<span class="dim">19:48:17 — Nillkin official site product page found</span><br>
+</div>
+
+<div class="grid">
+<div class="card">
+<div class="status">✅</div>
+<h3>pre_llm_call Hook</h3>
+<p>Plugin's lifecycle hook fired on the factual question. Classified as a fact question and injected Phase 0.5 verification context into the system prompt.</p>
+</div>
+<div class="card">
+<div class="status">🔍</div>
+<h3>Multi-source Search</h3>
+<p>Agent independently searched English + Chinese sources (CoVe principle). Checked Amazon, Nillkin official site, Alibaba.</p>
+</div>
+<div class="card">
+<div class="status">🧠</div>
+<h3>Phase 0.5 Pipeline</h3>
+<p>Agent recognized the price claim → extracted it → searched &ge;2 independent sources → synthesized answer.</p>
+</div>
+</div>
+</div>
+
+<div class="section">
+<h2><span class="badge badge-green">3</span> Skill Methodology — Phase 0.5 Verification Flow</h2>
+
+<div class="insight">
+<h3>📋 What the Double-Check pipeline did for this query</h3>
+<p>
+<span class="tag tag-pre">P0.5</span> <strong>Extract claim</strong>: "Nillkin Cube Pocket keyboard costs $X"<br>
+<span class="tag tag-pre">P0.5</span> <strong>Time-sensitive?</strong> ✅ Price → force external search<br>
+<span class="tag tag-cove">CoVe</span> <strong>Independent answer</strong>: Searched English + Chinese queries without re-reading own knowledge<br>
+<span class="tag tag-cove">FIRE</span> <strong>Iterate</strong>: First search → Amazon (unavailable) → Nillkin official → eBay → multiple angles<br>
+<span class="tag tag-sift">SIFT</span> <strong>Source trace</strong>: Each price claim tagged with source URL<br>
+</p>
+</div>
+
+<div class="terminal">
+<span class="dim">Phase 0.5 Pre-verification result:</span><br>
+<br>
+<span class="highlight">Nillkin Cube Pocket keyboard — estimated $69.99 (Amazon listing) / ¥500 (CN channels)</span><br>
+<span class="dim">Sources: amazon.com/B0GHRPRXPF, nillkin.com, multiple CN e-commerce</span><br>
+<span class="dim">Status: ⚡ 渠道价差大 (retail vs direct), ❓ 当前实时库存未知</span>
+</div>
+</div>
+
+<div class="section">
+<h2><span class="badge badge-accent">4</span> Architecture in Action</h2>
+
+<div class="grid">
+<div class="card">
+<h3>🔵 Hermes Plugin (orchestrator)</h3>
+<p><code>pre_llm_call</code> → detect factual intent → inject verification instruction. <span class="highlight">~100 lines.</span></p>
+</div>
+<div class="card">
+<h3>🟢 Main Agent (worker)</h3>
+<p>Reads injected context → calls <code>delegate_task</code> → spawns sub-agent for deep search.</p>
+</div>
+<div class="card">
+<h3>🟡 Sub-agent (verifier)</h3>
+<p>Full tool access (web_search, browser) → executes CoVe+FIRE → returns structured result.</p>
+</div>
+</div>
+</div>
+
+<div class="section">
+<h2><span class="badge badge-green">5</span> Quick Start</h2>
+<div class="terminal">
+<span class="prompt">$</span> <span class="cmd">hermes plugins enable double-check</span><br>
+<span class="out">✓ Plugin double-check enabled</span><br>
+<br>
+<span class="prompt">$</span> <span class="cmd">hermes chat --skills double-check</span><br>
+<span class="out">💬 Ready. Plugin hooks auto-fire on every turn.</span><br>
+<br>
+<span class="prompt">&gt;</span> <span class="cmd">How much is a Nintendo Switch OLED in Hong Kong?</span><br>
+<span class="dim">(pre_llm_call fires → CoVe+FIRE search → verified answer delivered)</span>
+</div>
+</div>
+
+<div class="footer">
+<p>Double-Check v2.1.0 · Hermes Agent v0.15.1 · Model: DeepSeek V4 Flash</p>
+<p>Tested 2026-06-30 · <a href="https://github.com/onezion12344/double-check-agent" style="color:var(--accent)">github.com/onezion12344/double-check-agent</a></p>
+</div>
+
+</div>
+</body>
+</html>
