@@ -1,250 +1,181 @@
 """
-Fact-Check Plugin for Hermes Agent.
+Double-Check Plugin v2.0 — Hermes Agent.
 
-Hybrid verification framework merging journalism standards (SIFT, IFCN)
-with LLM academic research (CoVe, FIRE, FABLE) into a 5-phase pipeline.
+Hybrid: LLM classify → inject delegate instruction → sub-agent does deep verification.
+No regex pattern matching. No built-in search engine. Plugin is orchestrator, not worker.
 
-Hooks into Hermes lifecycle:
-  - pre_llm_call: Phase 0.5 — verify user's factual questions before answering
-  - transform_llm_output: Lightweight post-check on dense responses
-  - post_llm_call: Background trigger for full Round 1-4 (future)
+Hooks:
+  - pre_llm_call: Classify question → inject delegate_task instruction for sub-agent
+  - transform_llm_output: Detect dense factual response → inject post-check instruction
 
-Tools:
-  - verify_claims: Agent-driven factual claim verification via web search
-
-Commands:
-  - /factcheck: Manual trigger for full 4-round fact-check
+Three pillars:
+  - Fact: prices, times, addresses, specs, numbers
+  - Theory: logic, reasoning, concept validation
+  - Tool Use: tool selection auditing
 """
 
 import json
-import re
-import time
 import logging
-from pathlib import Path
 
-from . import verify
+logger = logging.getLogger("plugins.double-check")
 
-logger = logging.getLogger("plugins.fact-check")
-CACHE_DIR = Path.home() / ".hermes" / "plugins" / "fact-check" / "cache"
+CLASSIFY_PROMPT = """Analyze this user question and return ONLY a JSON object (no other text):
+
+{
+  "question_type": "factual" | "theory" | "tool_use" | "general",
+  "claims": ["list of specific factual claims mentioned"],
+  "time_sensitive": true | false,
+  "confidence": "high" | "medium" | "low"
+}
+
+Classification rules:
+- factual: asks about prices, times, addresses, specs, numbers, current info, comparisons
+- theory: asks about concepts, logic, reasoning, definitions, explanations, differences
+- tool_use: asks about how to do something, which tool/method to use
+- general: greetings, opinions, subjective, chat, emotional
+
+Extract ALL specific claims (prices, names, numbers, addresses, times) into the claims array.
+
+Question: {question}"""
+
+POST_CHECK_PROMPT = """Does this response contain factual claims that should be verified by a sub-agent?
+Return ONLY a JSON object (no other text):
+
+{
+  "needs_check": true | false,
+  "claim_count": <number of factual claims detected>,
+  "reason": "<brief explanation>"
+}
+
+Only return needs_check=true if there are at least 3 specific factual claims
+(prices, times, numbers, names, locations, specifications).
+
+Response: {response}"""
 
 
-# ── Phase 0.5 trigger patterns ─────────────────────────────────
-
-QUESTION_PATTERNS = re.compile(
-    r'(多少钱|价格|预算|成本|花了多少|售价|多少钱一个|'
-    r'几点|什么时候|营业时间|开门|关门|时间表|时刻表|'
-    r'在哪|地址|怎么去|路线|坐标|怎么走|'
-    r'是什么牌子|怎么样|好不好|怎么样的|'
-    r'几公里|多大面积|多长|多宽|多少|多重|'
-    r'哪个好|哪个便宜|哪个性价比|'
-    r'参数|配置|规格|尺寸|'
-    r'how much|price|cost|how long|how far|how many|'
-    r'where is|address|location|hours|schedule|'
-    r'open|close|specs|specifications)',
-    re.IGNORECASE,
-)
+def _classify(llm_complete, question: str) -> dict:
+    """Use LLM to classify question type and extract claims."""
+    try:
+        raw = llm_complete(CLASSIFY_PROMPT.format(question=question[:600]))
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError, Exception) as e:
+        logger.warning("Classify failed: %s", e)
+        return {"question_type": "general", "claims": [], "time_sensitive": False, "confidence": "low"}
 
 
-def _has_question_marker(text: str) -> bool:
-    """Fast pre-check: does text look like a factual question?"""
-    return bool(QUESTION_PATTERNS.search(text[:300]))
+def _post_check(llm_complete, response: str) -> dict:
+    """Use LLM to check if response needs post-verification."""
+    try:
+        raw = llm_complete(POST_CHECK_PROMPT.format(response=response[:1000]))
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError, Exception) as e:
+        logger.warning("Post-check failed: %s", e)
+        return {"needs_check": False, "claim_count": 0, "reason": "classification failed"}
 
 
-# ── register() ──────────────────────────────────────────────────
+def _build_pre_instruction(qtype: str, claims: list, time_sensitive: bool) -> str:
+    """Build delegate instruction injected before LLM answers."""
+    labels = {"factual": "🔍 事实性", "theory": "🧠 理论/逻辑", "tool_use": "🔧 工具选择"}
+    label = labels.get(qtype, "📋")
 
-def register(ctx):
-    """Register all fact-check hooks, tools, and commands."""
+    lines = [
+        f"{label} **问题检测 — 需要子 Agent 验证**\n",
+        f"类型: {label}",
+    ]
+    if claims:
+        lines.append(f"待验证主张 ({len(claims)} 条):")
+        for c in claims[:8]:
+            lines.append(f"  • {c}")
+    if time_sensitive:
+        lines.append("\n⚠️ **包含时效敏感信息** — 必须搜索当前实时数据")
+    lines.extend([
+        "\n**请在回答前执行:**",
+        "1. 调用 `delegate_task` 启动子 agent",
+        "2. 子 agent: 全量搜索 → 交叉验证 ≥2 源 → 结构化返回",
+        "3. 等子 agent 返回后，用验证结果回答",
+        "4. 每个主张标注来源",
+    ])
+    return "\n".join(lines)
 
-    # ════════════════════════════════════════════════════════════
-    # TOOL: verify_claims
-    # ════════════════════════════════════════════════════════════
-    verify_schema = {
-        "name": "verify_claims",
-        "description": (
-            "Verify factual claims using web search. "
-            "Pass a list of claim strings. Returns per-claim status: "
-            "✅ confirmed / 🔧 corrected / ⚡ disputed / ❌ unverifiable.\n\n"
-            "Call this BEFORE answering time-sensitive questions about "
-            "prices, hours, addresses, or specifications. "
-            "The agent should always call this when the user asks about costs."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "claims": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": (
-                        "List of factual claims to verify. "
-                        "Example: [\"Nillkin keyboard costs ¥200\", "
-                        "\"Correos opens on Sundays\"]"
-                    ),
-                },
-            },
-            "required": ["claims"],
-        },
-    }
 
-    def handle_verify(params, **kwargs):
-        claims = params.get("claims", [])
-        if not claims:
-            return json.dumps(
-                {"error": "No claims provided", "results": []}, ensure_ascii=False
-            )
-
-        t0 = time.time()
-        results = verify.batch_verify(claims, time_sensitive_default=True)
-        duration_ms = int((time.time() - t0) * 1000)
-
-        # Log diagnostic report
-        report = verify.create_diagnostic_report(claims, results, duration_ms)
-        report_path = CACHE_DIR / f"verify-{int(t0)}.json"
-        try:
-            report_path.write_text(
-                json.dumps(report, ensure_ascii=False, indent=2, default=str)
-            )
-        except Exception:
-            pass
-
-        output = verify.format_verify_tool_output(results)
-        return output
-
-    ctx.register_tool(
-        name="verify_claims",
-        toolset="fact_check",
-        schema=verify_schema,
-        handler=handle_verify,
-        description=(
-            "Verify factual claims using web search. "
-            "Call BEFORE answering questions about prices, hours, or addresses."
-        ),
+def _build_post_instruction(claim_count: int) -> str:
+    """Build post-answer verification instruction."""
+    return (
+        "\n\n📋 **Post-Answer 验证请求**\n\n"
+        f"检测到 {claim_count} 个事实主张。\n"
+        "请对上一轮回答执行:\n"
+        "1. `delegate_task` → 子 agent 做 SIFT → CoVe+FIRE → FABLE → Truth Sandwich\n"
+        "2. 返回修正并追加"
     )
 
-    # ════════════════════════════════════════════════════════════
-    # HOOK: pre_llm_call — Phase 0.5 (Pre-answer verification)
-    # ════════════════════════════════════════════════════════════
+
+def register(ctx):
+    """Register Double-Check hooks."""
+
+    # ═══════════════════════════════════════════════
+    # pre_llm_call — Classify → inject delegate
+    # ═══════════════════════════════════════════════
     def pre_llm_hook(user_message, is_first_turn, **kwargs):
-        """
-        Phase 0.5 — Before the agent answers:
-        1. Check if user question has factual claims
-        2. If yes, do quick pre-verification
-        3. Inject verified context into the LLM call
-        """
-        if not user_message or len(user_message) < 15:
+        if not user_message or len(user_message) < 10:
             return None
 
-        # Fast regex pre-check (avoids LLM call for non-factual questions)
-        if not _has_question_marker(user_message):
+        classification = _classify(ctx.llm.complete, user_message)
+        qtype = classification.get("question_type", "general")
+
+        if qtype == "general":
             return None
 
-        # Use LLM to classify the question type
-        try:
-            classification = ctx.llm.complete(
-                "Does this user question ask about any of the following? "
-                "1. Prices or costs\n"
-                "2. Times, hours, schedules\n"
-                "3. Addresses or locations\n"
-                "4. Product specifications or parameters\n"
-                "5. Numerical values or measurements\n\n"
-                "Reply with ONLY 'yes' or 'no'.\n\n"
-                f"Question: {user_message[:500]}"
-            )
-        except Exception as e:
-            logger.warning("pre_llm classification failed: %s", e)
+        claims = classification.get("claims", [])
+        time_sensitive = classification.get("time_sensitive", False)
+
+        # Theory without specific claims: only trigger if high confidence
+        if qtype == "theory" and not claims and classification.get("confidence") != "high":
             return None
 
-        if classification and classification.strip().lower().startswith("yes"):
-            # Extract specific claims for pre-verification
-            try:
-                claims_raw = ctx.llm.complete(
-                    "Extract ALL specific factual claims the user is asking about. "
-                    "Include prices, times, addresses, names, and numbers.\n"
-                    "Return as a JSON array of strings, e.g.:\n"
-                    '["Nillkin keyboard price", "Correos opening hours"]\n'
-                    "If no specific claims, return empty array [].\n\n"
-                    f"Question: {user_message[:1000]}"
-                )
-                claims = json.loads(claims_raw)
-            except (json.JSONDecodeError, TypeError, Exception):
-                claims = []
-
-            if claims:
-                # Clean and deduplicate claims
-                claims = [c.strip() for c in claims if c.strip() and len(c.strip()) > 3]
-                claims = list(dict.fromkeys(claims))  # preserve order, dedup
-
-                if claims:
-                    t0 = time.time()
-                    # Only time-sensitive claims get web search in pre-answer (fast path)
-                    results = []
-                    for c in claims:
-                        if verify.is_time_sensitive(c):
-                            results.append(
-                                verify.verify_single(c, force_search=True)
-                            )
-                        else:
-                            results.append(
-                                {"claim": c, "status": "⚠️", "correct": "",
-                                 "sources": [], "note": "General knowledge — verify if needed"}
-                            )
-
-                    duration_ms = int((time.time() - t0) * 1000)
-                    logger.info(
-                        "Phase 0.5: %d claims pre-verified in %dms",
-                        len(claims), duration_ms,
-                    )
-
-                    context = verify.format_verification_context(results)
-                    if context:
-                        return {"context": context}
-
-        return None
+        instruction = _build_pre_instruction(qtype, claims, time_sensitive)
+        logger.info("Phase 0.5: %s | %d claims | ts=%s", qtype, len(claims), time_sensitive)
+        return {"context": instruction}
 
     ctx.register_hook("pre_llm_call", pre_llm_hook)
 
-    # ════════════════════════════════════════════════════════════
-    # HOOK: transform_llm_output — Post-answer lightweight check
-    # ════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════
+    # transform_llm_output — Post-check instruction
+    # ═══════════════════════════════════════════════
     def transform_output(response_text, **kwargs):
-        """
-        Lightweight post-answer check.
-        Fires before response is delivered to user.
-        Only triggers on dense responses (≥300 chars + factual markers).
-        Uses regex patterns ONLY — no LLM call to keep it fast.
-        """
         if not response_text or len(response_text) < 300:
             return None
 
-        factual_count = verify.count_factual_markers(response_text)
-        if factual_count < 5:
+        result = _post_check(ctx.llm.complete, response_text)
+        if not result.get("needs_check"):
             return None
 
-        errors = verify.fast_post_check(response_text)
-        if not errors:
+        count = result.get("claim_count", 0)
+        if count < 3:
             return None
 
-        correction = verify.format_truth_sandwich(errors)
-        return response_text + "\n\n" + correction
+        logger.info("Post-check: %d claims", count)
+        return response_text + _build_post_instruction(count)
 
     ctx.register_hook("transform_llm_output", transform_output)
 
-    # ════════════════════════════════════════════════════════════
-    # COMMAND: /factcheck
-    # ════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════
+    # Command: /factcheck
+    # ═══════════════════════════════════════════════
     def handle_factcheck(args):
-        """Manually trigger fact-check."""
         return (
-            "🔍 **Fact-Check Plugin Active**\n\n"
-            "The plugin is running. Factual claims in your questions are "
-            "automatically pre-verified before I answer.\n\n"
-            "To verify specific claims, tell me:\n"
-            '  "verify these claims: [list your claims]"'
+            "🔍 **Double-Check v2.0 — Active**\n\n"
+            "自动检测问题类型 → delegate 子 agent 验证 → 返回验证结果。\n\n"
+            "三大支柱:\n"
+            "  • 🔍 Fact — 事实性主张验证\n"
+            "  • 🧠 Theory — 逻辑/推理验证\n"
+            "  • 🔧 Tool Use — 工具选择审计\n\n"
+            "子 agent 执行全量搜索 + 交叉验证 + 结构化返回。"
         )
 
     ctx.register_command(
         name="factcheck",
         handler=handle_factcheck,
-        description="Show fact-check plugin status and usage",
+        description="Show Double-Check v2.0 status",
     )
 
-    logger.info("Fact-Check Plugin v1.1.0 loaded — hooks, tool, and command registered")
+    logger.info("Double-Check Plugin v2.0 loaded — LLM classify + delegate pattern")

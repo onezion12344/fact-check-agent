@@ -6,7 +6,7 @@
 {"audio_path": "data/artifacts/tts/20260620/ee6987a6e5d24e66a2b625b4198a5954.wav"}
 ```
 
-This is NOT an absolute path — prepending the home directory won't work.
+This is NOT an absolute path — prepending the user's home directory won't work.
 
 ## Root Directory
 The MiMo MCP server runs from:
@@ -43,7 +43,8 @@ MEDIA:/tmp/<output>.ogg
 Telegram plays .ogg files sent as voice as native voice bubbles.
 
 ## Voice Design
-Custom voices are created via `mimo_voice_design_create` and referenced by `voice_id=design_<uuid>`. See `mimo_voice_list` for available voices.
+Custom voices are created via `mimo_voice_design_create` and referenced by `voice_id=design_<uuid>`.
+Harry's preferred Spanish teacher voice: `design_49712b031a14` (Carlos — 西班牙本土男声，慢速 0.85-0.9x, warm and clear).
 
 ## Pitfall
 - MiMo TTS output is always WAV. Don't try to play it directly — convert to Opus first.

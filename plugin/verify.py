@@ -1,239 +1,33 @@
 """
-Core verification engine for Hermes Fact-Check Plugin.
-
-Pure functions — no Hermes API dependency. Uses duckduckgo_search (free, no API key)
-for web search verification.
+Double-Check v2.0 — Formatting utilities only.
+Verification work is delegated to sub-agents via delegate_task.
 """
 
-import json
-import re
 import time
-from pathlib import Path
 
-CACHE_DIR = Path.home() / ".hermes" / "plugins" / "fact-check" / "cache"
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
+def format_truth_sandwich(errors: list[dict]) -> str:
+    """Format as Truth Sandwich correction block."""
+    if not errors:
+        return ""
 
-HAS_DDG = False
-try:
-    from ddgs import DDGS
-    HAS_DDG = True
-except ImportError:
-    pass
+    parts = ["📋 **Fact-Check Verification Results**\n"]
 
-# ── Pattern detection ──────────────────────────────────────────
+    for severity in ("critical", "experience", "cosmetic"):
+        items = [e for e in errors if e.get("severity") == severity]
+        if not items:
+            continue
+        label = {"critical": "🔴 May need correction:", "experience": "🟡 Consider reviewing:", "cosmetic": "🟢 Minor:"}
+        parts.append(label[severity])
+        for e in items:
+            parts.append(f"• {e.get('what_was_written', '')}")
+            if e.get("correction"):
+                parts.append(f"  → {e['correction']}")
+            if e.get("source"):
+                parts.append(f"  Source: {e['source']}")
+        parts.append("")
 
-PRICE_RE = re.compile(r'[¥$€£]\s*\d+(?:[.,]\d+)?')
-TIME_RE = re.compile(r'\d{1,2}[:.]\d{2}\s*(?:am|pm|AM|PM)?')
-NUM_RE = re.compile(r'\b\d{3,}\b')
-URL_RE = re.compile(r'https?://[^\s]+')
+    return "\n".join(parts)
 
-TIME_SENSITIVE_PATTERNS = [
-    re.compile(r'[¥$€£]'),
-    re.compile(r'\d{1,2}[:.]\d{2}'),
-    re.compile(r'开[门关]|营[业]|时[间候]'),
-    re.compile(r'价[格钱]|售[价]|成[本]|花[费]|多[少钱]'),
-    re.compile(r'地[址点]|位[于]|在[哪]|路[线]|怎么去'),
-    re.compile(r'hou[rs]|open|close|price|cost|address|location',
-               re.IGNORECASE),
-    re.compile(r'schedule|timetable|operating|business'),
-]
-
-FACTUAL_PATTERNS = [
-    (re.compile(r'[¥$€£]\s*\d+'), 'price'),
-    (re.compile(r'\d{1,2}[:.]\d{2}'), 'time'),
-    (re.compile(r'地[址点]|位[于]|在[哪]|address|location', re.IGNORECASE), 'address'),
-    (re.compile(r'\b\d{4,}\b'), 'number'),
-    (re.compile(r'价[格钱]|多少[钱]|预算|成本|价格|多少钱|花多少|售价'), 'price_cn'),
-    (re.compile(r'几点|什么时候|营业|关门|开门|时间|开门时间'), 'time_cn'),
-    (re.compile(r'在哪|怎么去|地址|路线|坐标'), 'address_cn'),
-]
-
-
-def has_factual_content(text: str) -> bool:
-    """Quick regex scan: does text contain factual patterns?"""
-    if not text or len(text) < 10:
-        return False
-    return any(p[0].search(text) for p in FACTUAL_PATTERNS)
-
-
-def count_factual_markers(text: str) -> int:
-    """Count number of price + large-number markers in text."""
-    if not text:
-        return 0
-    prices = len(PRICE_RE.findall(text))
-    nums = len(NUM_RE.findall(text))
-    return prices + nums
-
-
-def is_time_sensitive(claim: str) -> bool:
-    """Does this claim need current/web verification?"""
-    return any(p.search(claim.lower()) for p in TIME_SENSITIVE_PATTERNS)
-
-
-# ── Web search ─────────────────────────────────────────────────
-
-def web_search(query: str, max_results: int = 3) -> list[dict]:
-    """Search the web via DuckDuckGo. Returns [{title, url, snippet}]."""
-    if not HAS_DDG:
-        return []
-    try:
-        with DDGS() as ddgs:
-            results = []
-            for r in ddgs.text(query, max_results=max_results):
-                results.append({
-                    "title": r.get("title", ""),
-                    "url": r.get("href", ""),
-                    "snippet": r.get("body", ""),
-                })
-            return results
-    except Exception:
-        return []
-
-
-def multi_angle_search(claim: str, max_per_angle: int = 3) -> list[dict]:
-    """Search from 2 different angles. Returns deduplicated sources."""
-    results = web_search(claim, max_per_angle)
-    if results:
-        # Second angle: extract main terms
-        # Remove price symbols and common words for a cleaner second query
-        terms = re.sub(r'[¥$€£,，。]', '', claim)
-        terms = re.sub(r'\s+', ' ', terms).strip()[:80]
-        results2 = web_search(terms, max_per_angle)
-        results.extend(results2)
-
-    # Deduplicate by URL
-    seen = set()
-    unique = []
-    for r in results:
-        url = r.get("url", "")
-        if url and url not in seen:
-            seen.add(url)
-            unique.append(r)
-    return unique[:6]
-
-
-# ── Claim verification ─────────────────────────────────────────
-
-def verify_single(claim: str, force_search: bool = True) -> dict:
-    """Verify a single claim with optional web search.
-
-    Four status categories:
-      ✅ 基本正确 — ≥2 independent sources agree
-      ⚡ 有争议 — sources disagree or insufficient independent sources
-      ❓ 查不到 — searched but found no relevant sources
-      ❌ 错 — sources clearly contradict the claim
-
-    Returns:
-        {"claim": str, "status": "✅"|"⚡"|"❓"|"❌"|"⚠️",
-         "correct": str, "sources": [dict], "note": str}
-    """
-    needs_search = force_search or is_time_sensitive(claim)
-
-    if not needs_search:
-        return {
-            "claim": claim,
-            "status": "⚠️",
-            "correct": "",
-            "sources": [],
-            "note": "Not searched — LLM internal knowledge only. Use verify tool if certainty needed.",
-        }
-
-    sources = multi_angle_search(claim)
-
-    if not sources:
-        return {
-            "claim": claim,
-            "status": "❓",
-            "correct": "",
-            "sources": [],
-            "note": "查不到 — no web results found",
-        }
-
-    # Count independent sources by domain
-    domains = set()
-    for s in sources:
-        try:
-            from urllib.parse import urlparse
-            domain = urlparse(s.get("url", "")).netloc
-            if domain:
-                domains.add(domain)
-        except Exception:
-            pass
-
-    num_domains = len(domains)
-    num_results = len(sources)
-
-    if num_domains >= 2 and num_results >= 2:
-        status = "✅"
-        note = f"基本正确 — {num_domains} independent sources, {num_results} results"
-    elif num_domains == 1 and num_results >= 2:
-        status = "⚡"
-        note = f"有争议 — {num_results} results but all from same domain ({num_domains})"
-    elif num_domains >= 2:
-        status = "⚡"
-        note = f"有争议 — {num_domains} domains but only {num_results} result(s), low confidence"
-    else:
-        status = "⚡"
-        note = f"有争议 — only {num_results} result(s) from {num_domains} domain(s)"
-
-    return {
-        "claim": claim,
-        "status": status,
-        "correct": "",
-        "sources": sources[:5],
-        "note": note,
-    }
-
-
-def batch_verify(claims: list[str], time_sensitive_default: bool = True) -> list[dict]:
-    """Verify multiple claims in batch."""
-    return [
-        verify_single(c, force_search=time_sensitive_default or is_time_sensitive(c))
-        for c in claims
-    ]
-
-
-# ── Post-check ─────────────────────────────────────────────────
-
-def fast_post_check(text: str) -> list[dict]:
-    """Quick regex-based scan of response text for potential issues.
-
-    Returns list of error dicts or empty list.
-    No LLM calls — purely pattern-based for speed.
-    """
-    errors = []
-    if not text or len(text) < 200:
-        return errors
-
-    # Check for prices without source attribution
-    prices = PRICE_RE.findall(text)
-    if len(prices) >= 3:
-        has_source = any(
-            w in text.lower()
-            for w in ["source", "according to", "per", "据", "来源", "官网", "查"]
-        )
-        if not has_source:
-            errors.append({
-                "what_was_written": f"Multiple prices ({len(prices)} found) without sources",
-                "correction": "Add source attribution for each price",
-                "severity": "experience",
-                "type": "unverified_prices",
-            })
-
-    # Check for URLs that look like they contain verification data
-    urls = URL_RE.findall(text)
-    if len(prices) >= 2 and not urls:
-        errors.append({
-            "what_was_written": f"{len(prices)} prices mentioned without supporting URLs",
-            "correction": "Cite sources for prices",
-            "severity": "cosmetic",
-            "type": "missing_citations",
-        })
-
-    return errors
-
-
-# ── Formatting ──────────────────────────────────────────────────
 
 def format_verification_context(results: list[dict]) -> str:
     """Format verification results as context injection for the LLM."""
@@ -246,66 +40,26 @@ def format_verification_context(results: list[dict]) -> str:
         claim = r.get("claim", "")
         correct = r.get("correct", "")
         note = r.get("note", "")
+        sources = r.get("sources", [])
 
-        if tag == "✅":
-            lines.append(f"✅ {claim} — 基本正确: {note}")
-        elif tag == "⚡":
-            lines.append(f"⚡ {claim} — 有争议: {note}")
-        elif tag == "❓":
-            lines.append(f"❓ {claim} — 查不到: {note}")
-        elif tag == "❌":
-            lines.append(f"❌ {claim} — 错: {correct or note}")
-        elif tag == "⚠️":
-            lines.append(f"⚠️ {claim} — 未外验: {note}")
+        tag_map = {"✅": "✅", "⚡": "⚡ 有争议", "❓": "❓ 查不到", "❌": "❌ 错", "⚠️": "⚠️ 未验证"}
+        lines.append(f"{tag_map.get(tag, tag)}: **{claim}**")
+        if correct:
+            lines.append(f"   → 正确: {correct}")
+        if note:
+            lines.append(f"   → {note}")
+        for s in sources[:2]:
+            lines.append(f"   → [{s.get('title','')}]({s.get('url','')})")
 
-    lines.append(
-        "\nUse the above verified information. "
-        "For ⚡ items, acknowledge uncertainty. "
-        "For ❌ items, do NOT repeat the claim. "
-        "For ❓ items, say 'could not find reliable info'."
-    )
+    lines.append("\n使用以上验证结果回答。❌ 不重复错误说法。❓ 诚报未查到。")
     return "\n".join(lines)
 
 
-def format_truth_sandwich(errors: list[dict]) -> str:
-    """Format as Truth Sandwich correction block."""
-    if not errors:
+def format_verify_tool_output(results: list[dict]) -> str:
+    """Format verification results for tool output."""
+    if not results:
         return ""
 
-    critical = [e for e in errors if e.get("severity") == "critical"]
-    experience = [e for e in errors if e.get("severity") == "experience"]
-    cosmetic = [e for e in errors if e.get("severity") == "cosmetic"]
-
-    parts = ["📋 **Fact-Check Post-Verification**\n"]
-
-    if critical:
-        parts.append("🔴 **May need correction:**")
-        for e in critical:
-            parts.append(f"• {e.get('what_was_written', '')}")
-            if e.get("correction"):
-                parts.append(f"  → {e['correction']}")
-        parts.append("")
-
-    if experience:
-        parts.append("🟡 **Consider reviewing:**")
-        for e in experience:
-            parts.append(f"• {e.get('what_was_written', '')}")
-            if e.get("correction"):
-                parts.append(f"  → {e['correction']}")
-        parts.append("")
-
-    if cosmetic:
-        parts.append("🟢 **Minor:**")
-        for e in cosmetic:
-            parts.append(f"• {e.get('what_was_written', '')}")
-            if e.get("correction"):
-                parts.append(f"  → {e['correction']}")
-
-    return "\n".join(parts)
-
-
-def format_verify_tool_output(results: list[dict]) -> str:
-    """Format verification results for the verify_claims tool output."""
     summary = {"✅": 0, "⚡": 0, "❓": 0, "❌": 0, "⚠️": 0}
     for r in results:
         s = r.get("status", "⚠️")
@@ -314,7 +68,7 @@ def format_verify_tool_output(results: list[dict]) -> str:
     lines = [
         "═══════════════════════════════════════",
         "  Fact-Check Verification Results",
-        f"  ✅ {summary.get('✅',0)}基本正确  ⚡ {summary.get('⚡',0)}有争议  ❓ {summary.get('❓',0)}查不到  ❌ {summary.get('❌',0)}错",
+        f"  ✅ {summary.get('✅',0)} ⚡ {summary.get('⚡',0)} ❓ {summary.get('❓',0)} ❌ {summary.get('❌',0)}",
         "═══════════════════════════════════════\n",
     ]
 
@@ -325,45 +79,24 @@ def format_verify_tool_output(results: list[dict]) -> str:
         note = r.get("note", "")
         sources = r.get("sources", [])
 
-        tag_label = {
-            "✅": "✅ 基本正确",
-            "⚡": "⚡ 有争议",
-            "❓": "❓ 查不到",
-            "❌": "❌ 错",
-            "⚠️": "⚠️ 未验证",
-        }.get(tag, tag)
-
+        tag_label = {"✅": "✅ 确认", "⚡": "⚡ 争议", "❓": "❓ 未查", "❌": "❌ 错误", "⚠️": "⚠️ 未验"}.get(tag, tag)
         lines.append(f"{tag_label}: **{claim}**")
         if correct:
             lines.append(f"   → Correct: {correct}")
         if note:
             lines.append(f"   → {note}")
         for s in sources[:2]:
-            title = s.get("title", "")
-            url = s.get("url", "")
-            if url:
-                lines.append(f"   → [{title}]({url})")
+            lines.append(f"   → [{s.get('title','')}]({s.get('url','')})")
         lines.append("")
 
     return "\n".join(lines)
 
 
-def create_diagnostic_report(
-    claims: list[str],
-    results: list[dict],
-    duration_ms: int,
-) -> dict:
-    """Create a structured diagnostic report for logging."""
+def create_diagnostic_report(claims: list[str], results: list[dict], duration_ms: int) -> dict:
+    """Create structured diagnostic report for logging."""
     return {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "claims_count": len(claims),
         "duration_ms": duration_ms,
-        "summary": {
-            "basic_correct": sum(1 for r in results if r.get("status") == "✅"),
-            "disputed": sum(1 for r in results if r.get("status") == "⚡"),
-            "not_found": sum(1 for r in results if r.get("status") == "❓"),
-            "wrong": sum(1 for r in results if r.get("status") == "❌"),
-            "unchecked": sum(1 for r in results if r.get("status") == "⚠️"),
-        },
-        "results": results,
+        "summary": {s: sum(1 for r in results if r.get("status") == s) for s in ["✅", "⚡", "❓", "❌", "⚠️"]},
     }

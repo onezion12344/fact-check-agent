@@ -1,8 +1,7 @@
-name: fact-check
-version: "1.1.0"
+name: double-check
+version: "2.0.0"
 description: >
-  Pre-answer verification + Post-answer fact-checking for Hermes Agent.
-  Merges SIFT/IFCN/CoVe/FIRE/FABLE into a 5-phase verification pipeline.
-  Auto-verifies factual claims (prices, times, addresses, numbers) before
-  the agent answers, and checks dense responses for accuracy after delivery.
+  Double-Check v2.0 — Unified Fact, Theory & Tool-Use verification.
+  LLM classify → inject delegate instruction → sub-agent deep verification.
+  No regex, no built-in search. Plugin is orchestrator, not worker.
 requires_env: []
