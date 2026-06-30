@@ -1,6 +1,6 @@
 # Fact-Check Hermes Plugin Architecture
 
-> Built June 2026. Plugin at `~/.hermes/plugins/fact-check/`. GitHub: `onezion12344/fact-check-agent`
+> Built June 2026. Plugin at `~/.hermes/plugins/fact-check/`. GitHub: `onezion12344/double-check-agent`
 
 ## Overview
 

@@ -286,7 +286,7 @@ This skill's methodology is also packaged as a **native Hermes Plugin** at `~/.h
 | Component | Location |
 |:----------|:---------|
 | Plugin files | `~/.hermes/plugins/fact-check/` |
-| GitHub repo | `onezion12344/fact-check-agent` |
+| GitHub repo | `onezion12344/double-check-agent` |
 | Plugin docs | `skill_view("fact-check", "references/plugin-architecture.md")` |
 
 **学术论文核查专有子模式：** 当核查对象是带有大量论文引用的研究报告时，使用 `references/academic-paper-factcheck.md` 中记录的专用流程——SIFT优先使用已提取的论文全文逐字对照，CoVe根据不同论文类型的可验证性分级处理。

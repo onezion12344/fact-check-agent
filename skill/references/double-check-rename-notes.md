@@ -30,8 +30,8 @@ mv ~/.hermes/plugins/fact-check ~/.hermes/plugins/double-check
 ## Old Names Still Work
 
 - `skill_view("fact-check"...` still resolves (Hermes finds by name match in skill dir)
-- GitHub repo remains `onezion12344/fact-check-agent` (can't rename without breaking URLs)
-- GH Pages still at `onezion12344.github.io/fact-check-agent/`
+- GitHub repo now `onezion12344/double-check-agent` (renamed 2026.06.30)
+- GH Pages still at `onezion12344.github.io/fact-check-agent/` (need to update GH Pages settings → rename to double-check-agent)
 
 ## Loading This Skill
 

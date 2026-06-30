@@ -2,8 +2,8 @@
 
 **Team:** HUANG Ziyang (Harry) — The University of Hong Kong
 **Track:** Social Impact
-**GitHub:** https://github.com/onezion12344/fact-check-agent
-**Live Demo:** https://onezion12344.github.io/fact-check-agent/
+**GitHub:** https://github.com/onezion12344/double-check-agent
+**Live Demo:** https://onezion12344.github.io/double-check-agent/
 
 ## Problem
 
