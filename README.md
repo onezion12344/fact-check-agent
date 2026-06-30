@@ -7,7 +7,7 @@
 
 A 5-phase verification pipeline that catches what LLMs miss. Merges 12 academic papers + 10 journalism standards into a production-grade agent plugin. Embeds directly into Hermes Agent as a native skill + plugin.
 
-**🎬 [Demo Video](https://github.com/onezion12344/nova-competition/raw/main/submissions/intro_video.mp4)**
+**🔴 [factcheck.onezion.top](https://factcheck.onezion.top)** — *on demand (email to start tunnel)* · **🎬 [Demo Video](https://github.com/onezion12344/nova-competition/raw/main/submissions/intro_video.mp4)**
 
 ---
 
