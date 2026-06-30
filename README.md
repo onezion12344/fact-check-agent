@@ -55,7 +55,7 @@ LLMs hallucinate. Even at 5% error rate, AI agents produce millions of incorrect
 | Errors caught | — | **15/15 (100%)** |
 | False positives | — | 0 |
 
-Full methodology: [`benchmark-report-v4-3judge.md`](https://github.com/onezion12344/nova-competition/blob/main/submissions/benchmark-report-v4-3judge.md)
+Full methodology: [`benchmarking/benchmark-report-v4-3judge.md`](benchmarking/benchmark-report-v4-3judge.md)
 
 ---
 
@@ -232,13 +232,14 @@ hermes plugin enable double-check
 
 ---
 
-## NOVA 2026
+## Benchmarking
 
-Submitted to **HKUST × Tencent Research Institute NOVA Competition**, Social Impact track.
+Full test set and methodology in [`benchmarking/`](benchmarking/):
 
-- Abstract → [`nova-competition/submissions/abstract.md`](https://github.com/onezion12344/nova-competition/blob/main/submissions/abstract.md)
-- Benchmark → [`nova-competition/submissions/benchmark-report-v4-3judge.md`](https://github.com/onezion12344/nova-competition/blob/main/submissions/benchmark-report-v4-3judge.md)
-- Landing page → [factcheck.onezion.top](https://factcheck.onezion.top)
+- [`benchmark-report-v4-3judge.md`](benchmarking/benchmark-report-v4-3judge.md) — 40-question × 3-judge benchmark (+35pp catch rate)
+- [`benchmark-test-set.md`](benchmarking/benchmark-test-set.md) — 40 questions across 4 categories
+- [`human-arbitration-sheet.md`](benchmarking/human-arbitration-sheet.md) — 3 disputed questions requiring human judgment
+- [`test-results-v2.md`](benchmarking/test-results-v2.md) — raw LLM vs auto-verify vs full pipeline comparison
 
 ---
 
