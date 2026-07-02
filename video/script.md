@@ -2,7 +2,7 @@
 
 ## Scene 1 — Title (7s)
 **Visual:** Gradient title "Double-Check", tagline, team names
-**Narration:** "AI agents hallucinate at scale. Even a 5% error rate produces millions of wrong facts every day. We built Double-Check — a verification pipeline that catches what LLMs miss. Our team: Harry Huang and Pan Zhengyu from the University of Hong Kong."
+**Narration:** "AI agents hallucinate at scale. Even a 5% error rate produces millions of wrong facts every day. We built Double-Check — a verification pipeline that catches what LLMs miss. Our team: Harry OneZion and Pan Zhengyu from the University of Hong Kong."
 
 ## Scene 2 — Problem (7s)
 **Visual:** 4 error-rate cards (Prices 50%, Stats 50%, Schedules 30%, Specs 20%)
@@ -10,7 +10,7 @@
 
 ## Scene 3 — The Gap (7s)
 **Visual:** Two cards side by side — Journalism vs LLM Research
-**Narration:** "Existing solutions fall into two camps. Journalism standards like SIFT and IFCN are rigorous, but purely manual. LLM verification research like CoVe and FIRE is automated, but lacks source discipline. Neither works alone."
+**Narration:** "Existing solutions fall into two camps. Journalism methods like SIFT and IFCN are rigorous, but purely manual. LLM research like CoVe and FIRE is automated, but lacks source discipline. Our insight: journalism's methods + LLM's research = Double-Check."
 
 ## Scene 4 — Landscape (7s)
 **Visual:** 6-card grid showing all approaches
@@ -34,7 +34,7 @@
 
 ## Scene 9 — Team (7s)
 **Visual:** Two team cards
-**Narration:** "Built at the University of Hong Kong by Harry Huang, studying Business and Engineering, and Pan Zhengyu, studying AI and Data Science. First-year undergraduates who saw a gap in how AI agents handle facts."
+**Narration:** "Built at the University of Hong Kong by Harry OneZion and Pan Zhengyu — first-years in BA&BEng in AI&Data Science who saw a gap in how AI agents handle facts."
 
 ## Scene 10 — Closing (7s)
 **Visual:** Gradient title, tagline, GitHub link

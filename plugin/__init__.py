@@ -264,69 +264,103 @@ def _post_check(llm_complete, response: str) -> dict:
 
 
 def _build_pre_instruction(qtype: str, claims: list, time_sensitive: bool) -> str:
-    """Build delegate instruction injected before LLM answers."""
+    """Build delegate instruction — forces TWO rounds of sub-agent verification (pre + post)."""
     labels = {"factual": "🔍 事实性", "theory": "🧠 理论/逻辑", "tool_use": "🔧 工具选择"}
     label = labels.get(qtype, "📋")
+    emoji = "🔍" if qtype == "factual" else "🧠" if qtype == "theory" else "🔧"
 
     lines = [
-        f"{label} **问题检测 — 需要子 Agent 验证**\n",
-        f"类型: {label}",
+        f"⛔ [DOUBLE-CHECK TRIGGERED — DOUBLE VERIFICATION REQUIRED]",
+        f"",
+        f"用户问题被 {emoji} Double-Check Plugin 分类为: {label}",
+        f"",
+        f"### 你的任务 (MANDATORY — TWO ROUNDS 不可跳过):",
+        f"",
+        f"**第一轮 — 预核查 (PRE-VERIFY):**",
+        f"1. 立即调用 `delegate_task` 启动子 agent，在回答用户之前做独立验证",
+        f"2. 子 agent 使用 DIFFERENT MODEL (config delegation 指定的) → full web search",
+        f"3. 子 agent 返回结构化结果 (✅/⚡/❓/❌ 每条主张)",
+        f"4. **把核查结果作为独立消息发送到当前聊天** (用户要在 IM 里看到)",
+        f"5. 再回答用户原始问题 — 用已验证的信息作答",
+        f"",
+        f"**第二轮 — 后验查 (POST-VERIFY, 回答完后自动做):**",
+        f"6. 回答完毕后，再用 `delegate_task` 启动另一个子 agent",
+        f"7. 子 agent 检查你的回答中的事实主张是否准确",
+        f"8. 如有错误 → 用 Truth Sandwich 格式发修正到聊天",
+        f"9. 如全部正确 → 发一条 ✅ 确认消息",
+        f"",
+        f"**⚠️ 注意:**",
+        f"- 两轮使用同一个子 agent 不行，必须是两次独立的 `delegate_task` 调用",
+        f"- 子 agent 必须用不同的模型 (delegation config 已设置)",
+        f"- 子 agent 必须做 web search，不能只靠 LLM 内部知识",
+        f"- **用户如果在聊天里看不到核查消息 → 说明你漏了步骤。重做。**",
     ]
     if claims:
-        lines.append(f"待验证主张 ({len(claims)} 条):")
+        lines.append(f"")
+        lines.append(f"### 检测到的事实主张 ({len(claims)} 条):")
         for c in claims[:8]:
-            lines.append(f"  • {c}")
+            lines.append(f"  - {c}")
     if time_sensitive:
-        lines.append("\n⚠️ **包含时效敏感信息** — 必须搜索当前实时数据")
-
-    # Pillar-specific verification methodology
-    if qtype == "factual":
-        lines.extend([
-            "\n**事实验证方法:**",
-            "1. Phase 0.5: 提取所有事实主张 → 标记时效敏感项",
-            "2. CoVe: 从≥2个独立角度搜索，不参考已有回答",
-            "3. FIRE: 如果搜索结果不足，迭代更换搜索词",
-            "4. IFCN 标准: 每条主张 ≥2 个独立来源",
-            "5. 每个主张标注 ✅/⚡/❓/❌ 状态",
-        ])
-    elif qtype == "theory":
-        lines.extend([
-            "\n**逻辑/理论验证方法 (FLICC + Toulmin):**",
-            "1. FLICC 框架: 检查 Fake experts / Logical fallacies / Impossible expectations / Cherry picking / Conspiracy",
-            "2. Toulmin 模型: Claim → Data → Warrant → Qualifier → Rebuttal",
-            "3. FoVer: 将关键主张形式化为一阶逻辑 → 验证一致性",
-            "4. 检查: 循环论证 / 虚假二分 / 滑坡谬误 / 稻草人 / 诉诸情感",
-        ])
-    elif qtype == "tool_use":
-        lines.extend([
-            "\n**工具选择验证方法 (6-路线分类):**",
-            "1. 效率: 有没有更便宜/更快完成同一目标的工具？",
-            "2. 冗余: 信息是否可从之前调用获得？",
-            "3. 组合: 是否有组合方案优于单一工具？",
-            "4. Over-privilege: 是否选了权限过大但不需要的？",
-            "5. Over-scope: 工具执行范围是否超出问题需求？",
-            "6. 参考: ToolTree, Feasible is Not Enough, AutoTool 等规划方法",
-        ])
+        lines.append("")
+        lines.append("⚠️ **包含时效敏感信息** — 必须搜索当前实时数据，不能依赖模型内部知识")
 
     lines.extend([
-        "\n**通用执行步骤:**",
-        "1. 调用 `delegate_task` 启动子 agent",
-        "2. 子 agent: 按上述方法全量搜索 → 交叉验证 → 结构化返回",
-        "3. 等子 agent 返回后，用验证结果回答",
-        "4. 每个主张标注来源",
+        "",
+        "### 预核查输出格式 (用户要在 IM 里看到的):",
+        "",
+        "━━━━━━━━━━━━━━━━━━",
+        f"{emoji} Double-Check 预核查 [{qtype.upper()}]",
+        "━━━━━━━━━━━━━━━━━━",
+        "✅ xxx — 2源确认",
+        "⚡ xxx — 来源有分歧",
+        "❌ xxx — 实际为 yyy (来源)",
+        "━━━━━━━━━━━━━━━━━━",
+        "",
+        "### 后验输出格式 (回答完后额外发):",
+        "",
+        "━━━━━━━━━━━━━━━━━━",
+        "📋 Double-Check 后验核查",
+        "━━━━━━━━━━━━━━━━━━",
+        "✅ 全部正确 — 3条主张均已独立验证确认",
+        "━━━━━━━━━━━━━━━━━━",
+        "",
+        "或",
+        "",
+        "━━━━━━━━━━━━━━━━━━",
+        "📋 Double-Check 后验核查 — 发现修正",
+        "━━━━━━━━━━━━━━━━━━",
+        "❌ xxx → 实际为 yyy (来源)",
+        "━━━━━━━━━━━━━━━━━━",
     ])
     return "\n".join(lines)
 
 
 def _build_post_instruction(claim_count: int) -> str:
-    """Build post-answer verification instruction."""
-    return (
-        "\n\n📋 **Post-Answer 验证请求**\n\n"
-        f"检测到 {claim_count} 个事实主张。\n"
-        "请对上一轮回答执行:\n"
-        "1. `delegate_task` → 子 agent 做 SIFT → CoVe+FIRE → FABLE → Truth Sandwich\n"
-        "2. 返回修正并追加"
-    )
+    """Build post-answer verification instruction — forces visible check."""
+    return "\n".join([
+        "",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "📋 POST-ANSWER Double-Check 验证请求",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"检测到上一轮回答包含约 {claim_count} 个事实主张。",
+        "",
+        "**你的任务 (MANDATORY):**",
+        "1. 用 `delegate_task` 启动子 agent — 对上一轮回答做 SIFT → CoVe+FIRE → FABLE → Truth Sandwich",
+        "2. **子 agent 返回后，把核查结果以独立消息发到当前聊天**",
+        "3. 对 ✅ 项直接标注，对 ❌ 项做 Truth Sandwich 修正",
+        "",
+        "输出格式:",
+        "━━━━━━━━━━━━━━━━━━",
+        "📋 Double-Check 后验核查",
+        "━━━━━━━━━━━━━━━━━━",
+        "✅ xxx — 已验证",
+        "⚡ xxx — 有争议",
+        "❌ xxx → 实际为 yyy",
+        "━━━━━━━━━━━━━━━━━━",
+        "",
+        "如果用户没有看到这条核查消息 → 说明你漏了。重做。",
+    ])
 
 
 def register(ctx):
